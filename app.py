@@ -59,74 +59,79 @@ if choice == "Home":
 # --------------- Model Metrics Page ---------------
 elif choice == "Model Metrics":
     st.header("📈 Model Performance")
-
-    # Evaluation Data
-    data = pd.read_csv("creditcard.csv")
-    legit = data[data.Class == 0]
-    fraud = data[data.Class == 1]
-    legit_sample = legit.sample(n=492, random_state=42)
-    test_data = pd.concat([legit_sample, fraud])
-
-    X = test_data[FEATURE_COLUMNS]
-    y = test_data['Class']
-
-    from sklearn.model_selection import train_test_split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, stratify=y, test_size=0.2, random_state=42
+    st.info("Upload a CSV with all features PLUS a 'Class' column for true labels (0=legit, 1=fraud).")
+    st.download_button(
+        label="Download sample labeled CSV",
+        data=pd.DataFrame([dict(list(zip(FEATURE_COLUMNS, [0.0]*len(FEATURE_COLUMNS))) + [('Class', 0)])]).to_csv(index=False),
+        file_name="sample_metrics.csv",
+        mime="text/csv"
     )
-    X_scaled = scaler.transform(X_test)
-    y_pred = model.predict(X_scaled)
-    y_prob = model.predict_proba(X_scaled)[:, 1]
 
-    # Classification report
-    report = classification_report(y_test, y_pred, output_dict=True)
-    st.write("### 🧾 Classification Report")
-    st.dataframe(pd.DataFrame(report).transpose())
+    uploaded_file = st.file_uploader("Upload a labeled CSV for metrics (must include 'Class')", type=["csv"])
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        missing_cols = [col for col in (FEATURE_COLUMNS + ['Class']) if col not in df.columns]
+        if missing_cols:
+            st.error(f"Uploaded file is missing columns: {missing_cols}")
+        else:
+            from sklearn.model_selection import train_test_split
+            X = df[FEATURE_COLUMNS]
+            y = df["Class"]
+            X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+            X_scaled = scaler.transform(X_test)
+            y_pred = model.predict(X_scaled)
+            y_prob = model.predict_proba(X_scaled)[:, 1]
 
-    # Confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
-    st.write("### Confusion Matrix")
-    fig, ax = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
-    st.pyplot(fig)
+            # Classification report
+            report = classification_report(y_test, y_pred, output_dict=True)
+            st.write("### 🧾 Classification Report")
+            st.dataframe(pd.DataFrame(report).transpose())
 
-    # ROC Curve & Area
-    st.write("### ROC Curve")
-    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
-    roc_auc = roc_auc_score(y_test, y_prob)
-    fig_roc = go.Figure(
-        data=[go.Scatter(x=fpr, y=tpr, name='ROC Curve')],
-        layout=go.Layout(title=f'ROC Curve (AUC={roc_auc:.2f})', xaxis_title='False Positive Rate', yaxis_title='True Positive Rate')
-    )
-    st.plotly_chart(fig_roc)
+            # Confusion matrix
+            cm = confusion_matrix(y_test, y_pred)
+            st.write("### Confusion Matrix")
+            fig, ax = plt.subplots()
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+            ax.set_xlabel("Predicted")
+            ax.set_ylabel("Actual")
+            st.pyplot(fig)
 
-    # Precision-Recall Curve
-    st.write("### Precision-Recall Curve")
-    prec, rec, pr_thresholds = precision_recall_curve(y_test, y_prob)
-    pr_auc = average_precision_score(y_test, y_prob)
-    fig_pr = go.Figure(
-        data=[go.Scatter(x=rec, y=prec, name='Precision-Recall')],
-        layout=go.Layout(title=f'Precision-Recall Curve (AUC={pr_auc:.2f})', xaxis_title='Recall', yaxis_title='Precision')
-    )
-    st.plotly_chart(fig_pr)
+            # ROC curve
+            st.write("### ROC Curve")
+            fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+            roc_auc = roc_auc_score(y_test, y_prob)
+            fig_roc = go.Figure(
+                data=[go.Scatter(x=fpr, y=tpr, name='ROC Curve')],
+                layout=go.Layout(title=f'ROC Curve (AUC={roc_auc:.2f})', xaxis_title='False Positive Rate', yaxis_title='True Positive Rate')
+            )
+            st.plotly_chart(fig_roc)
 
-    # Feature Importance (Logistic Regression Coefs)
-    if st.checkbox("Show Feature Importance"):
-        importances = np.abs(model.coef_[0])
-        feat_imp = pd.Series(importances, index=FEATURE_COLUMNS).sort_values(ascending=False)
-        st.write("### Feature Importance (abs(Logistic Coefficient))")
-        st.bar_chart(feat_imp)
+            # Precision-Recall curve
+            st.write("### Precision-Recall Curve")
+            prec, rec, pr_thresholds = precision_recall_curve(y_test, y_prob)
+            pr_auc = average_precision_score(y_test, y_prob)
+            fig_pr = go.Figure(
+                data=[go.Scatter(x=rec, y=prec, name='Precision-Recall')],
+                layout=go.Layout(title=f'Precision-Recall Curve (AUC={pr_auc:.2f})', xaxis_title='Recall', yaxis_title='Precision')
+            )
+            st.plotly_chart(fig_pr)
+
+            # Feature Importance (Logistic Regression Coefs)
+            if st.checkbox("Show Feature Importance"):
+                importances = np.abs(model.coef_[0])
+                feat_imp = pd.Series(importances, index=FEATURE_COLUMNS).sort_values(ascending=False)
+                st.write("### Feature Importance (abs(Logistic Coefficient))")
+                st.bar_chart(feat_imp)
+
+    else:
+        st.info("Awaiting labeled CSV upload for metrics.")
 
 # --------------- Predict Fraud Page ---------------
 elif choice == "Predict Fraud":
     st.header("🚨 Predict New Transactions")
-
     st.markdown("""
-    - Upload a CSV file:  
-       
-    
+    - Upload a CSV file with **exactly these columns** (no 'Class'):  
+      **Time, V1, V2, ..., V28, Amount**  
     """)
 
     st.download_button(
@@ -140,11 +145,9 @@ elif choice == "Predict Fraud":
     if file is not None:
         try:
             user_data = pd.read_csv(file)
-            # Drop 'Class' if present
             if 'Class' in user_data.columns:
                 user_data = user_data.drop(columns=['Class'])
 
-            # Validate columns
             if sorted(user_data.columns) != sorted(FEATURE_COLUMNS):
                 st.error(f"Incorrect columns. File must contain exactly: {FEATURE_COLUMNS}")
             else:
@@ -166,7 +169,6 @@ elif choice == "Predict Fraud":
 elif choice == "Manual Prediction":
     st.header("📝 Manual Transaction Entry")
     st.write("Enter transaction details:")
-
     manual_input = {}
     for col in FEATURE_COLUMNS:
         manual_input[col] = st.number_input(f"{col}", value=0.0)
